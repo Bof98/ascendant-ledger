@@ -6,6 +6,28 @@ It is designed for individual players who want a private, QuickBooks-style view 
 
 > Ascendant Ledger is an independent community project and is not affiliated with or endorsed by Sim Companies.
 
+## Screenshots
+
+### Financial Dashboard
+
+Ascendant Ledger provides a clean financial overview with revenue, profit, cash flow, inventory, assets, liabilities, transaction activity, and financial health indicators.
+
+![Ascendant Ledger Dashboard](docs/screenshots/dashboard-magnates.png)
+
+### Dual-Realm Support
+
+Magnates and Entrepreneurs are maintained as completely separate financial ledgers. Switch between Realms directly from the application header.
+
+![Ascendant Ledger Entrepreneurs Realm](docs/screenshots/dashboard-entrepreneurs.png)
+
+### CSV Import
+
+Upload Sim Companies Account History, Income Statement, Cash Flow Statement, and Balance Sheet exports directly into the selected Realm.
+
+Ascendant Ledger automatically detects the CSV type, validates the data, prevents duplicates, and keeps imports isolated between Realms.
+
+![Ascendant Ledger CSV Import](docs/screenshots/import-csv.png)
+
 ## Version 1.1.0 — dual Realm support
 
 Sim Companies allows a player to operate a separate business in each Realm. Ascendant Ledger now treats those businesses as independent ledgers:
