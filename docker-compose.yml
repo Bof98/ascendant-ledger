@@ -1,0 +1,54 @@
+# Ascendant Ledger — complete single-container NAS deployment.
+# The Node service serves both the financial API and the browser application.
+
+services:
+  ledger:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ascendant-ledger:latest
+    container_name: ascendant-ledger
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    environment:
+      DATA_DIR: /data
+      HOST: 0.0.0.0
+      PORT: 8080
+
+    ports:
+      # Defaults to loopback. Set BIND_ADDRESS=0.0.0.0 in .env for direct LAN
+      # access, or leave loopback-only when using a reverse proxy on this host.
+      - "${BIND_ADDRESS:-127.0.0.1}:${HOST_PORT:-8080}:8080"
+
+    volumes:
+      - ledger-data:/data
+
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  ledger-data:
+    name: ascendant-ledger-data

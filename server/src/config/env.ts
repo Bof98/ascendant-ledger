@@ -1,0 +1,87 @@
+import { z } from 'zod';
+import path from 'node:path';
+
+/**
+ * Environment configuration.
+ *
+ * Everything the container needs is read once, validated once, and frozen. A bad
+ * value fails at boot with a readable message rather than surfacing as a strange
+ * runtime error later.
+ *
+ * DATA_DIR is the single most important setting: it is the directory bind-mounted
+ * from the NAS, and it holds the SQLite database plus its WAL sidecar files. It
+ * must never point inside the container's ephemeral filesystem.
+ */
+
+const booleanish = z
+  .string()
+  .transform((v) => v.trim().toLowerCase())
+  .pipe(z.enum(['true', 'false', '1', '0', 'yes', 'no']))
+  .transform((v) => v === 'true' || v === '1' || v === 'yes');
+
+const EnvSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  HOST: z.string().min(1).default('0.0.0.0'),
+  PORT: z.coerce.number().int().min(1).max(65535).default(8080),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+
+  /** Directory holding the SQLite database. Must be a persistent volume. */
+  DATA_DIR: z.string().min(1).default('./data'),
+  /** Database filename inside DATA_DIR. */
+  DATABASE_FILENAME: z.string().min(1).default('ascendant-ledger.db'),
+
+  /** Single-user login. Off by default; turn on before exposing via a proxy. */
+  AUTH_ENABLED: booleanish.default('false'),
+  /** Required when AUTH_ENABLED is true. */
+  SESSION_SECRET: z.string().min(32).optional(),
+  /** First-boot credentials used only to seed app_users when auth is enabled. */
+  ADMIN_USERNAME: z.string().min(1).max(80).optional(),
+  ADMIN_PASSWORD: z.string().min(12).max(256).optional(),
+
+  /** Upload guards. The setting in app_settings may lower these, never raise them. */
+  MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(26_214_400), // 25 MiB
+  MAX_FILES_PER_BATCH: z.coerce.number().int().positive().max(100).default(20),
+
+  /** Set to true only when running behind a reverse proxy you control. */
+  TRUST_PROXY: booleanish.default('false'),
+});
+
+type RawEnv = z.infer<typeof EnvSchema>;
+
+export interface AppConfig extends RawEnv {
+  /** Absolute path to the SQLite file, derived from DATA_DIR + DATABASE_FILENAME. */
+  databasePath: string;
+  isProduction: boolean;
+}
+
+function build(source: NodeJS.ProcessEnv): AppConfig {
+  const parsed = EnvSchema.safeParse(source);
+
+  if (!parsed.success) {
+    const issues = parsed.error.issues
+      .map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`)
+      .join('\n');
+    throw new Error(`Invalid environment configuration:\n${issues}`);
+  }
+
+  const env = parsed.data;
+
+  if (env.AUTH_ENABLED && !env.SESSION_SECRET) {
+    throw new Error(
+      'AUTH_ENABLED is true but SESSION_SECRET is unset. ' +
+        'Generate one with: openssl rand -base64 48',
+    );
+  }
+
+  const dataDir = path.resolve(env.DATA_DIR);
+
+  return Object.freeze({
+    ...env,
+    databasePath: path.join(dataDir, env.DATABASE_FILENAME),
+    DATA_DIR: dataDir,
+    isProduction: env.NODE_ENV === 'production',
+  });
+}
+
+export const config: AppConfig = build(process.env);
+export { build as buildConfig };

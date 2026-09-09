@@ -1,0 +1,38 @@
+{
+  "name": "@ascendant-ledger/server",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "npm run verify:attribution && tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "migrate": "tsx src/scripts/migrate.ts",
+    "db:inspect": "tsx src/scripts/inspect-schema.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "backup": "tsx src/scripts/backup.ts",
+    "preflight": "npm run verify:attribution && npm run typecheck && npm test && npm run build",
+    "verify:attribution": "tsx src/scripts/verify-attribution.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "csv-parse": "^5.6.0",
+    "fastify": "^5.12.3",
+    "kysely": "^0.27.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  },
+  "author": "NullBot",
+  "license": "MIT"
+}

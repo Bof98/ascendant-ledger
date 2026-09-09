@@ -1,0 +1,18 @@
+node_modules/
+dist/
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.local
+*.log
+.DS_Store
+coverage/
+.vitest/
+
+# Sim Companies exports / local backups may contain private business data.
+sim-companies-*.csv
+backups/
+*.sqlite
+*.sqlite3

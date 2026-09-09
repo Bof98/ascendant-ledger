@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#101418">
+  <title>Ascendant Ledger</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><span>A</span></div>
+        <div><strong id="brandName">Ascendant Ledger</strong><small id="companyName">My Magnates Company</small></div>
+      </div>
+      <nav id="nav" class="nav"></nav>
+      <div class="sidebar-footer">
+        <div class="db-state"><span class="status-dot" id="healthDot"></span><span id="healthText">Connecting…</span></div>
+        <button class="icon-button" id="themeToggle" title="Toggle theme" aria-label="Toggle theme">◐</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="menu-button" id="menuButton" aria-label="Menu">☰</button>
+        <div class="page-heading"><h1 id="pageTitle">Dashboard</h1><p id="pageSubtitle">Financial overview</p></div>
+        <div class="top-actions">
+          <div class="realm-control" title="Switch Sim Companies realm">
+            <span class="realm-label">Realm</span>
+            <select id="realmSelect" aria-label="Sim Companies realm">
+              <option value="magnates">Magnates</option>
+              <option value="entrepreneurs">Entrepreneurs</option>
+            </select>
+          </div>
+          <div class="date-control" id="dateControl">
+            <select id="datePreset" aria-label="Date range">
+              <option value="all">All time</option>
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="month">This month</option>
+              <option value="previousMonth">Previous month</option>
+              <option value="custom">Custom</option>
+            </select>
+            <div id="customDates" class="custom-dates hidden"><input type="date" id="dateFrom"><span>to</span><input type="date" id="dateTo"><button class="btn small" id="applyDates">Apply</button></div>
+          </div>
+          <button class="btn primary" data-route="import">Import CSV</button>
+          <button class="avatar" id="userMenu" title="Account">AH</button>
+        </div>
+      </header>
+      <section id="content" class="content"><div class="loading-card">Loading Ascendant Ledger…</div></section>
+      <footer id="appAttribution" class="app-attribution" aria-label="Creator attribution">Created by NullBot | Copyright 2026</footer>
+    </main>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div id="toastRoot" class="toast-root"></div>
+
+  <div id="loginOverlay" class="login-overlay hidden">
+    <form id="loginForm" class="login-card">
+      <div class="brand-mark large"><span>A</span></div>
+      <h2>Ascendant Ledger</h2>
+      <p>Sign in to your private company ledger.</p>
+      <label>Username<input id="loginUsername" autocomplete="username" required></label>
+      <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <button class="btn primary full" type="submit">Sign in</button>
+      <div id="loginError" class="form-error"></div>
+    </form>
+  </div>
+
+  <script type="module" src="/assets/app.js"></script>
+</body>
+</html>

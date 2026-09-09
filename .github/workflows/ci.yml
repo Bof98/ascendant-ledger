@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - name: Install dependencies
+        working-directory: server
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        working-directory: server
+        run: npm run typecheck
+      - name: Test
+        working-directory: server
+        run: npm test
+      - name: Build
+        working-directory: server
+        run: npm run build

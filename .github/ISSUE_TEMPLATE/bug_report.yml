@@ -1,0 +1,35 @@
+name: Bug report
+description: Report a reproducible Ascendant Ledger problem
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove company names, counterparties, transaction IDs, financial figures, and other private information before posting logs or CSV samples.
+  - type: input
+    id: version
+    attributes:
+      label: Ascendant Ledger version
+      placeholder: 1.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installation type
+      options: [Docker Compose, Local Node.js, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include steps to reproduce and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs
+      render: shell
