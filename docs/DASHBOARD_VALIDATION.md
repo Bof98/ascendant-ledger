@@ -73,3 +73,12 @@ the dashboard labels their scope rather than treating them as realized profits.
   did not replace official statement values.
 - Verified seven live dashboard pages, download status, Import History provenance,
   latest statement figures, and mobile overflow in Chromium.
+
+## CSV downloads follow accounting-page captures
+
+- Removed the independent hourly download timer and interval setting.
+- Added tests for one download per accounting capture, ignoring other page
+  markers, no download on dashboard/status reads or elapsed hours, and no
+  repeated download on restart for the same visit.
+- Build and all 43 tests pass. Source timestamp observation uses the existing
+  capture worker's accounting marker; no changes to its game-page scheduling.

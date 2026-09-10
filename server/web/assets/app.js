@@ -1,5 +1,5 @@
-import { formatAmount, utcDateRange } from './presentation.js?v=20260910-csv1';
-import { renderOperations, disposeOperations } from './operations.js?v=20260910-csv1';
+import { formatAmount, utcDateRange } from './presentation.js?v=20260910-csv-pages1';
+import { renderOperations, disposeOperations } from './operations.js?v=20260910-csv-pages1';
 import { scopedApiUrl } from './urls.js';
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
@@ -114,7 +114,7 @@ async function renderCaptureStatus(){
   const el=document.createElement('div');el.className='callout';
   if(csv?.enabled){
     el.classList.toggle('warn',Boolean(csv.state?.error));
-    el.innerHTML=`<strong>Automatic SimCompanies CSV downloads</strong> · ${csv.state?.lastSuccess?`Last downloaded ${escapeHtml(fmtDateTime(csv.state.lastSuccess))}`:'First download pending'} · Every ${decimal(csv.intervalSeconds/3600,2)} hour(s).${csv.running?' Downloading…':''}${csv.state?.error?`<br>${escapeHtml(csv.state.error)}`:''}${capture?.enabled?'<br>Saved captures fill in recent activity between downloads. Official CSV statements take precedence.':''}${capture?.error?`<br>Capture sync: ${escapeHtml(capture.error)}`:''}`;
+    el.innerHTML=`<strong>Automatic SimCompanies CSV downloads</strong> · ${csv.state?.lastSuccess?`Last downloaded ${escapeHtml(fmtDateTime(csv.state.lastSuccess))}`:'Waiting for the next accounting page capture'} · Downloads when the accounting pages are captured.${csv.running?' Downloading…':''}${csv.state?.error?`<br>${escapeHtml(csv.state.error)}`:''}${capture?.enabled?'<br>Saved captures fill in recent activity between downloads. Official CSV statements take precedence.':''}${capture?.error?`<br>Capture sync: ${escapeHtml(capture.error)}`:''}`;
   }else if(capture?.enabled){
     el.classList.toggle('warn',Boolean(capture.error));
     el.innerHTML=`<strong>Saved capture sync</strong> · ${capture.state?.lastSuccess?`Last checked ${escapeHtml(fmtDateTime(capture.state.lastSuccess))}`:'Initial sync in progress'} · Checks every ${capture.intervalSeconds} seconds. CSV imports are also supported.${capture.error?`<br>${escapeHtml(capture.error)}`:''}`;

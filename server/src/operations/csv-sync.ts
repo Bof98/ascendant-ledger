@@ -11,7 +11,8 @@ import { commitBatch, previewFiles, type UploadedFile } from '../import/pipeline
 const ORIGIN = 'https://www.simcompanies.com';
 interface Cookie { name: string; value: string; domain: string; path?: string; expires?: number; secure?: boolean }
 export interface CsvSyncState {
-  lastAttempt: string; lastSuccess: string | null; nextAttempt: string;
+  lastAttempt: string; lastSuccess: string | null; nextAttempt: null;
+  captureTimestamp?: number;
   error: string | null; batchId: string | null; transactionsAdded: number;
   files: Array<{ filename: string; sha256: string; bytes: number; rows: number }>;
 }
@@ -132,40 +133,84 @@ export async function importDownloadedCsvs(raw: Db, qb: Kysely<Database>, config
   return { batchId: result.batchId, transactionsAdded: result.transactionsInserted, files: saved };
 }
 
+/** Read the marker written only after the capture worker visits accounting. */
+export function accountingCaptureTimestamp(filename: string): number {
+  if (!fs.existsSync(filename)) return 0;
+  const source = JSON.parse(fs.readFileSync(filename, 'utf8')) as { accounting?: unknown };
+  return typeof source.accounting === 'number' && Number.isFinite(source.accounting) && source.accounting > 0 ? source.accounting : 0;
+}
+
 export function registerCsvSync(app: FastifyInstance, raw: Db, qb: Kysely<Database>, config: AppConfig): void {
   let running: Promise<void> | null = null;
-  let timer: ReturnType<typeof setInterval> | undefined;
+  let watcher: fs.FSWatcher | undefined;
+  let debounce: ReturnType<typeof setTimeout> | undefined;
+  let closing = false;
   const enabled = Boolean(config.CSV_STORAGE_STATE_PATH);
-  async function run(): Promise<void> {
+  const sourceFile = path.join(path.dirname(config.OPERATIONS_DB_PATH ?? ''), 'capture_sources.json');
+  let observed = 0;
+
+  async function run(captureTimestamp: number): Promise<void> {
     const previous = readCsvSyncState(raw, config.OPERATIONS_REALM);
     const state: CsvSyncState = { lastAttempt: new Date().toISOString(), lastSuccess: previous?.lastSuccess ?? null,
-      nextAttempt: new Date(Date.now() + config.CSV_SYNC_INTERVAL_MS).toISOString(), error: null,
+      nextAttempt: null, captureTimestamp, error: null,
       batchId: previous?.batchId ?? null, transactionsAdded: 0, files: previous?.files ?? [] };
+    // Consume this visit before downloading: failures retry on the next page
+    // capture, and a restart cannot repeatedly download for the same visit.
+    saveState(raw, config.OPERATIONS_REALM, state);
     try {
       const result = await importDownloadedCsvs(raw, qb, config, await downloadCsvExports(config));
       Object.assign(state, result, { batchId: result.batchId ?? previous?.batchId ?? null, lastSuccess: new Date().toISOString() });
     } catch (error) {
-      // Network errors are sanitized above; do not log cookie state or response bodies.
       state.error = (error as Error).message;
       app.log.warn({ message: state.error }, 'Automatic CSV download did not complete');
     }
     saveState(raw, config.OPERATIONS_REALM, state);
   }
-  const tick = () => {
-    if (running) return;
-    const state = readCsvSyncState(raw, config.OPERATIONS_REALM);
-    if (state && Date.parse(state.nextAttempt) > Date.now()) return;
-    running = run().finally(() => { running = null; });
+  const check = () => {
+    if (closing || running) return;
+    let stamp: number;
+    try { stamp = accountingCaptureTimestamp(sourceFile); }
+    catch { return; } // The writer may still be replacing its JSON; await its next valid write.
+    if (stamp <= observed) return;
+    observed = stamp;
+    running = run(stamp).finally(() => { running = null; if (!closing) check(); });
   };
   app.get('/api/csv-sync', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const realm = String((request.query as { realm?: string }).realm ?? 'magnates');
     if (!['magnates', 'entrepreneurs'].includes(realm)) return reply.code(400).send({ error: 'Invalid realm' });
-    return { enabled: enabled && realm === config.OPERATIONS_REALM, intervalSeconds: config.CSV_SYNC_INTERVAL_MS / 1000,
-      running: Boolean(running) && realm === config.OPERATIONS_REALM, state: readCsvSyncState(raw, realm) };
+    const state = readCsvSyncState(raw, realm);
+    return { enabled: enabled && realm === config.OPERATIONS_REALM, trigger: 'accounting_capture',
+      running: Boolean(running) && realm === config.OPERATIONS_REALM, state: state ? { ...state, nextAttempt: null } : null };
   });
   if (enabled) {
-    app.addHook('onListen', async () => { tick(); timer = setInterval(tick, 60_000); timer.unref(); });
-    app.addHook('onClose', async () => { clearInterval(timer); await running; });
+    app.addHook('onListen', async () => {
+      const previous = readCsvSyncState(raw, config.OPERATIONS_REALM);
+      // When replacing the former hourly schedule, establish a baseline without
+      // downloading old captures. Later restarts catch up a new page visit once.
+      let current = 0;
+      try { current = accountingCaptureTimestamp(sourceFile); } catch { /* await next valid write */ }
+      observed = previous?.captureTimestamp ?? current;
+      if (previous?.captureTimestamp === undefined) {
+        saveState(raw, config.OPERATIONS_REALM, {
+          lastAttempt: previous?.lastAttempt ?? '', lastSuccess: previous?.lastSuccess ?? null,
+          nextAttempt: null, captureTimestamp: observed, error: previous?.error ?? null,
+          batchId: previous?.batchId ?? null, transactionsAdded: previous?.transactionsAdded ?? 0,
+          files: previous?.files ?? [],
+        });
+      }
+      // Watch the directory so atomic file replacement also delivers an event.
+      watcher = fs.watch(path.dirname(sourceFile), (_event, filename) => {
+        if (filename && filename.toString() !== path.basename(sourceFile)) return;
+        clearTimeout(debounce);
+        debounce = setTimeout(check, 250);
+      });
+      watcher.on('error', () => {
+        const state = readCsvSyncState(raw, config.OPERATIONS_REALM);
+        if (state) saveState(raw, config.OPERATIONS_REALM, { ...state, error: 'The accounting capture watcher stopped; restart the ledger to reconnect' });
+      });
+      check();
+    });
+    app.addHook('onClose', async () => { closing = true; watcher?.close(); clearTimeout(debounce); await running; });
   }
 }

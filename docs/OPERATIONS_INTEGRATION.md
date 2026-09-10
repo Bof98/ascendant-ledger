@@ -115,8 +115,14 @@ file is only read; session renewal remains with the capture service's normal
 login flow. `OPERATIONS_REALM` selects the ledger destination. Downloads do not
 switch companies or realms and do not perform gameplay actions.
 
-`CSV_SYNC_INTERVAL_MS` defaults to one hour (minimum 15 minutes). A saved next
-attempt time survives restarts. Each attempt checks company ID and realm through
+The ledger watches `capture_sources.json` next to `OPERATIONS_DB_PATH`. When the
+capture worker marks a new accounting-page visit, it downloads the CSVs once.
+Other page visits, dashboard/status requests, and elapsed hours do not trigger
+CSV downloads. There is no independent CSV timer. A persisted visit timestamp
+prevents repeats across restarts; a new visit while the ledger was offline is
+picked up once on restart. Failures retry at the next accounting-page visit.
+When switching from the former hourly mode, the existing marker becomes the
+baseline without fetching it again. Each attempt checks company ID and realm through
 the game's `/api/v3/companies/auth-data/` endpoint, downloads Account History,
 Income Statement, Balance Sheet, and Cash Flow Statement from the game's CSV
 endpoints, then checks identity again before importing. Requests are GET-only,
@@ -131,7 +137,7 @@ permissions. Unchanged exports reuse their stored file and do not create another
 import batch. New files use the existing transactional import pipeline and its
 transaction-ID deduplication. Import History distinguishes downloaded originals
 from generated capture files. `/api/csv-sync?realm=magnates` shows the most recent
-attempt, success, error, next attempt, file hashes and row counts; it never
+attempt, success, error, triggering capture timestamp, file hashes and row counts; it never
 exposes session cookies or the session-file path.
 
 Official uploaded or downloaded CSV statements take precedence over rounded

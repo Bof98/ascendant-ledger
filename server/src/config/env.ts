@@ -52,7 +52,6 @@ const EnvSchema = z.object({
   /** Existing Playwright session, read-only, used only for official CSV GETs. */
   CSV_STORAGE_STATE_PATH: z.string().min(1).optional(),
   CSV_COMPANY_ID: z.coerce.number().int().positive().optional(),
-  CSV_SYNC_INTERVAL_MS: z.coerce.number().int().min(900_000).max(86_400_000).default(3_600_000),
   CSV_DOWNLOAD_TIMEOUT_MS: z.coerce.number().int().min(100).max(120_000).default(60_000),
   CAPTURE_SYNC_INTERVAL_MS: z.coerce.number().int().min(10_000).max(3_600_000).default(60_000),
   OPERATIONS_REALM: z.enum(['magnates', 'entrepreneurs']).default('magnates'),
@@ -82,6 +81,7 @@ function build(source: NodeJS.ProcessEnv): AppConfig {
   const env = parsed.data;
 
   if (Boolean(env.CSV_STORAGE_STATE_PATH) !== Boolean(env.CSV_COMPANY_ID)) throw new Error('CSV_STORAGE_STATE_PATH and CSV_COMPANY_ID must be configured together');
+  if (env.CSV_STORAGE_STATE_PATH && !env.OPERATIONS_DB_PATH) throw new Error('CSV downloads require OPERATIONS_DB_PATH to follow accounting page captures');
   if (env.OPERATIONS_DB_PATH && !env.OPERATIONS_URL) throw new Error('OPERATIONS_DB_PATH requires OPERATIONS_URL for realm verification');
 
   if (env.OPERATIONS_URL) {

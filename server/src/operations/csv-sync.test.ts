@@ -10,7 +10,8 @@ import { getSignature } from '../import/detect.js';
 import { csvFile } from './capture-adapter.js';
 import { commitBatch } from '../import/pipeline.js';
 import { readCsv } from '../import/csv.js';
-import { downloadCsvExports, exportCookies, importDownloadedCsvs } from './csv-sync.js';
+import Fastify from 'fastify';
+import { registerCsvSync, downloadCsvExports, exportCookies, importDownloadedCsvs } from './csv-sync.js';
 
 let dir: string, config: AppConfig, raw: ReturnType<typeof openDatabase>, qb: ReturnType<typeof createQueryBuilder>;
 function fixtures() {
@@ -28,10 +29,10 @@ beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-csv-test-'));
   const session = path.join(dir, 'session.json');
   fs.writeFileSync(session, JSON.stringify({ cookies: [{ name: 'sessionid', value: 'test-only', domain: '.simcompanies.com', path: '/', expires: -1 }] }));
-  config = buildConfig({ DATA_DIR: dir, CSV_STORAGE_STATE_PATH: session, CSV_COMPANY_ID: '123' });
+  config = buildConfig({ DATA_DIR: dir, CSV_STORAGE_STATE_PATH: session, CSV_COMPANY_ID: '123', OPERATIONS_DB_PATH: path.join(dir, 'source.db'), OPERATIONS_URL: 'http://localhost:5010' });
   raw = openDatabase({ path: config.databasePath }); migrate(raw); qb = createQueryBuilder(raw);
 });
-afterEach(async () => { await qb.destroy(); fs.rmSync(dir, { recursive: true, force: true }); });
+afterEach(async () => { vi.unstubAllGlobals(); await qb.destroy(); fs.rmSync(dir, { recursive: true, force: true }); });
 function mockDownload(overrides: { realm?: number; company?: number; status?: number; contentType?: string; finalRealm?: number } = {}) {
   let identity = 0, csv = 0;
   return vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
@@ -108,4 +109,43 @@ it('preserves captured fields absent from the official export without changing i
   const archive = fs.readFileSync(path.join(dir, 'csv-downloads', 'magnates', result.files[2]!.filename), 'utf8');
   expect(archive).toBe(files[2]!.content);
   expect(archive).not.toContain('construction in progress');
+});
+
+it('downloads once per accounting-page capture, ignores other page markers, and persists the visit across restarts', async () => {
+  const marker = path.join(dir, 'capture_sources.json');
+  fs.writeFileSync(marker, JSON.stringify({ accounting: 1000 }));
+  const request = mockDownload(); vi.stubGlobal('fetch', request);
+  const start = async () => {
+    const app = Fastify(); registerCsvSync(app, raw, qb, config);
+    await app.listen({ host: '127.0.0.1', port: 0 }); return app;
+  };
+  let app = await start();
+  try {
+    expect(request).not.toHaveBeenCalled();
+    expect((await app.inject('/api/csv-sync')).json()).toMatchObject({ trigger: 'accounting_capture', state: { captureTimestamp: 1000, nextAttempt: null } });
+    fs.writeFileSync(marker, JSON.stringify({ accounting: 1000, warehouse: 1500 }));
+    await new Promise(resolve => setTimeout(resolve, 350));
+    expect(request).not.toHaveBeenCalled();
+    fs.writeFileSync(marker, JSON.stringify({ accounting: 2000 }));
+    await vi.waitFor(async () => expect((await app.inject('/api/csv-sync')).json()).toMatchObject({ running: false, state: { captureTimestamp: 2000, error: null, transactionsAdded: 1 } }), { timeout: 3000 });
+    expect(request).toHaveBeenCalledTimes(6);
+    fs.writeFileSync(marker, JSON.stringify({ accounting: 2000, finance: 2100 }));
+    await new Promise(resolve => setTimeout(resolve, 350));
+    expect(request).toHaveBeenCalledTimes(6);
+    await app.close(); app = await start();
+    expect(request).toHaveBeenCalledTimes(6);
+  } finally { await app.close(); }
+});
+
+it('does not download on an hourly clock or a status-page read', async () => {
+  fs.writeFileSync(path.join(dir, 'capture_sources.json'), JSON.stringify({ accounting: 1000 }));
+  const request = mockDownload(); vi.stubGlobal('fetch', request);
+  const app = Fastify(); registerCsvSync(app, raw, qb, config);
+  await app.listen({ host: '127.0.0.1', port: 0 });
+  try {
+    await app.inject('/api/csv-sync');
+    vi.useFakeTimers();
+    await vi.advanceTimersByTimeAsync(3_600_001);
+    expect(request).not.toHaveBeenCalled();
+  } finally { vi.useRealTimers(); await app.close(); }
 });
