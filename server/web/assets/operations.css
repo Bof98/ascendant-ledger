@@ -24,3 +24,5 @@
 @media(max-width:1250px){.ops-buildings{grid-template-columns:1fr}.ops-strategy-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:900px){.ops-columns{grid-template-columns:1fr}.ops-buildings{grid-template-columns:repeat(2,minmax(0,1fr))}.ops-kpis .kpi-value{font-size:25px}.topbar{height:auto;min-height:76px;flex-wrap:wrap;padding-top:12px;padding-bottom:12px}.page-heading{min-width:0;flex:1}.top-actions{flex-wrap:wrap}.realm-control select{max-width:220px}}
 @media(max-width:560px){.ops-toolbar{align-items:flex-start;flex-direction:column}.ops-buildings{grid-template-columns:1fr}.ops-kpis,.ops-strategy-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.ops-kpis .kpi-value,.ops-strategy-kpis .kpi-value{font-size:21px}.ops-market-filter{align-items:stretch;flex-direction:column}.ops-market-filter input{min-width:0}.top-actions{width:100%;margin-left:0}.realm-control{width:100%}.realm-control select{max-width:none;width:100%}}
+
+@media(max-width:900px){.date-control{display:flex;flex-wrap:wrap;max-width:100%}.custom-dates{top:100%;right:0;max-width:100%;flex-wrap:wrap}.custom-dates input{min-width:0;max-width:135px}}

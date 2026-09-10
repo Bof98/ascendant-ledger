@@ -109,7 +109,7 @@ async function refreshQuality(qb: Kysely<Database>, companyId: number): Promise<
 function csvEscape(value: unknown): string {
   let text = value === null || value === undefined ? '' : String(value);
   // Protect spreadsheet users from formula execution on exported text fields.
-  if (/^[=+\-@]/.test(text)) text = `'${text}`;
+  if (typeof value === 'string' && /^[=+\-@]/.test(text)) text = `'${text}`;
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
@@ -312,6 +312,7 @@ export function registerApiRoutes({ app, raw, qb, config }: RouteDeps): void {
     if (tail) insights.push(tail.message);
 
     return {
+      coverage: { income: trend.length, cashflow: flowTrend.length, balance: cashTrend.length },
       kpis: {
         sales, cogs: int(income['cogs']), grossProfit: gross, grossMargin,
         netIncome: int(income['net_income']), coreBusinessResult: core,
@@ -321,6 +322,9 @@ export function registerApiRoutes({ app, raw, qb, config }: RouteDeps): void {
         liabilities: int(latestBalance['liabilities']), equity: int(latestBalance['total_equity']),
         marketPurchases: int(ops['market_purchases']), marketSales: int(ops['market_sales']),
         productionSpending: int(ops['production_spending']), transactionCount: int(ops['transaction_count']),
+        ...(!trend.length ? { sales: null, cogs: null, grossProfit: null, grossMargin: null, netIncome: null, coreBusinessResult: null, netMargin: null, exchangeFees: null } : {}),
+        ...(!flowTrend.length ? { netCashFlow: null } : {}),
+        ...(!latestBalance['snapshot_date'] ? { cash: null, inventory: null, totalAssets: null, liabilities: null, equity: null } : {}),
       },
       latestBalance,
       health,
@@ -554,7 +558,8 @@ export function registerApiRoutes({ app, raw, qb, config }: RouteDeps): void {
               SUM(CASE WHEN resolved_at IS NULL AND severity='warning' THEN 1 ELSE 0 END) warnings,
               SUM(CASE WHEN resolved_at IS NULL AND severity='info' THEN 1 ELSE 0 END) info
        FROM data_quality_findings WHERE company_id=?`, [companyId]) ?? {};
-    return { stats, rows: rows.map((r) => ({ ...r, details: parseJson(r['details_json'], {}) })) };
+    const balanceSheetCount = int(one<Row>(raw, 'SELECT COUNT(*) count FROM balance_sheet_facts WHERE company_id=?', [companyId])?.['count']);
+    return { stats, balanceSheetCount, rows: rows.map((r) => ({ ...r, details: parseJson(r['details_json'], {}) })) };
   });
 
   app.get('/api/settings', async (request) => {
@@ -694,7 +699,7 @@ export function registerApiRoutes({ app, raw, qb, config }: RouteDeps): void {
 
     const where = clauses.length ? ` WHERE ${clauses.join(' AND ')}` : '';
     const tableColumns = new Set(
-      (raw.prepare(`PRAGMA table_info(${conf.table})`).all() as Array<{ name: string }>).map((column) => column.name),
+      (raw.prepare(`PRAGMA table_xinfo(${conf.table})`).all() as Array<{ name: string }>).map((column) => column.name),
     );
     const requestedSort = typeof q['sort'] === 'string' ? q['sort'] : '';
     const direction = String(q['dir'] ?? '').toLowerCase() === 'asc' ? 'ASC' : 'DESC';

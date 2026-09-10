@@ -8,6 +8,9 @@ import { createQueryBuilder } from './db/kysely.js';
 import { migrate } from './db/migrate.js';
 import type { Database } from './db/types.js';
 import { previewFiles, commitBatch, rollbackBatch, type UploadedFile } from './import/pipeline.js';
+import Fastify from 'fastify';
+import { registerApiRoutes } from './api/routes.js';
+import { buildConfig } from './config/env.js';
 
 const ACCOUNT = `id,Timestamp,Category,Money,Description,Details\r\n1001,2026-01-02T12:00:00.000001+00:00,production,-100,Production of Widgets,"{""version"":1,""price"":2.0,""quality"":0,""amount"":50,""building_name"":""Factory""}"\r\n1002,2026-01-02T12:05:00.000001+00:00,sales,200,Sales of Widgets,"{""version"":1,""building"":""G"",""quality"":0,""price"":5.0,""unit_cogs"":2.0,""remaining"":0,""building_name"":""Grocery store""}"\r\n1003,2026-01-02T12:10:00.000001+00:00,market,-60,Bought Inputs on market,"{""version"":1,""amount"":10,""price"":6.0,""sellers"":""Example Supplier""}"\r\n1004,2026-01-02T12:15:00.000001+00:00,market,80,Widgets market order filled,"{""version"":1,""resource"":99,""amount"":10,""quality"":0,""price"":8.0,""buyer"":""Example Buyer"",""profit"":20}"\r\n`;
 
@@ -46,6 +49,62 @@ afterEach(async () => {
 });
 
 describe('public fresh install', () => {
+  async function apiGet(url: string, asText = false) {
+    const app = Fastify();
+    registerApiRoutes({ app, raw, qb: db, config: buildConfig({ DATA_DIR: dir }) });
+    try {
+      const response = await app.inject(url);
+      expect(response.statusCode).toBe(200);
+      return asText ? response.body : response.json();
+    } finally { await app.close(); }
+  }
+
+  it('keeps absent financial data distinct from zero and does not claim a balance check', async () => {
+    const report = await apiGet('/api/dashboard');
+    expect(report.kpis.cash).toBeNull();
+    expect(report.kpis.netIncome).toBeNull();
+    expect(report.kpis.netCashFlow).toBeNull();
+    expect(report.coverage).toEqual({ income: 0, cashflow: 0, balance: 0 });
+    expect((await apiGet('/api/quality')).balanceSheetCount).toBe(0);
+  });
+
+  it('agrees across statement, dashboard, selected dates, duplicate import and rollback', async () => {
+    const input = files();
+    input[1]!.content = INCOME.replace(',1000,-600,0,0,-10', ',1000,-600,-20,0,-10').replace(',450', ',430');
+    const batch = await commitBatch(db, magnatesId, input);
+    const report = await apiGet('/api/dashboard?from=2026-01-02&to=2026-01-02');
+    expect(report.kpis).toMatchObject({ sales: 1000, grossProfit: 380, grossMargin: 0.38, netIncome: 430, cash: 500, netCashFlow: 450, transactionCount: 4 });
+    const exported = await apiGet('/api/export/transactions.csv', true);
+    expect(exported).toContain(',-100,');
+    expect(exported).not.toContain(",'-100,");
+    const statement = await apiGet('/api/statements/income');
+    expect(statement.rows[0].gross_profit).toBe(report.kpis.grossProfit);
+    expect((await apiGet('/api/dashboard?from=2026-01-03&to=2026-01-03')).kpis.cash).toBeNull();
+    expect((await apiGet('/api/dashboard?realm=entrepreneurs')).kpis.sales).toBeNull();
+    expect((await previewFiles(db, magnatesId, input))[0]!.rowsDuplicate).toBe(4);
+    await rollbackBatch(db, magnatesId, batch.batchId);
+    expect((await apiGet('/api/dashboard')).kpis.cash).toBeNull();
+  });
+
+  it('upgrades a populated ledger without changing official net income or imported rows', async () => {
+    const oldDir = path.join(dir, 'old-migrations');
+    fs.mkdirSync(oldDir);
+    const migrationDir = path.resolve(import.meta.dirname, 'db/migrations');
+    for (const name of fs.readdirSync(migrationDir).filter(name => name < '0010')) {
+      fs.copyFileSync(path.join(migrationDir, name), path.join(oldDir, name));
+    }
+    const existing = openDatabase({ path: path.join(dir, 'upgrade.db') });
+    migrate(existing, { dir: oldDir });
+    const existingQb = createQueryBuilder(existing);
+    try {
+      await commitBatch(existingQb, 1, [{ originalFilename: 'income.csv', content: INCOME.replace(',1000,-600,0,0,-10', ',1000,-600,-20,0,-10').replace(',450', ',430') }]);
+      expect(existing.prepare('SELECT gross_profit FROM income_statement_facts').get()).toEqual({ gross_profit: 400 });
+      migrate(existing, { dir: migrationDir });
+      expect(existing.prepare('SELECT gross_profit, net_income FROM income_statement_facts').get()).toEqual({ gross_profit: 380, net_income: 430 });
+      expect(existing.prepare('SELECT COUNT(*) count FROM statement_revisions').get()).toEqual({ count: 1 });
+    } finally { await existingQb.destroy(); }
+  });
+
   it('creates independent Magnates and Entrepreneurs ledgers', () => {
     const rows = raw.prepare('SELECT name, realm FROM companies ORDER BY id').all() as Array<{ name: string; realm: string }>;
     expect(rows).toEqual([
