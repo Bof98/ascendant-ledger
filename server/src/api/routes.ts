@@ -1,3 +1,4 @@
+import { healthStatus } from '../domain/health.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -151,29 +152,6 @@ function realmCompany(raw: Db, request: FastifyRequest): { id: number; name: str
   return row;
 }
 
-function healthStatus(summary: {
-  core: number;
-  netCash: number;
-  cashChange: number;
-  balanceDelta: number;
-  grossMargin: number | null;
-}): { status: string; score: number; reasons: string[] } {
-  let score = 50;
-  const reasons: string[] = [];
-  if (summary.core > 0) { score += 18; reasons.push('Core business result is profitable.'); }
-  else if (summary.core < 0) { score -= 18; reasons.push('Core business result is negative.'); }
-  if (summary.netCash > 0) { score += 12; reasons.push('Net cash flow is positive for the selected period.'); }
-  else if (summary.netCash < 0) { score -= 12; reasons.push('Net cash flow is negative for the selected period.'); }
-  if (summary.cashChange > 0) { score += 8; reasons.push('Cash increased from the previous balance-sheet snapshot.'); }
-  else if (summary.cashChange < 0) { score -= 8; reasons.push('Cash decreased from the previous balance-sheet snapshot.'); }
-  if (summary.balanceDelta === 0) { score += 7; reasons.push('The latest balance sheet reconciles exactly.'); }
-  else { score -= 20; reasons.push('The latest balance sheet is out of balance.'); }
-  if (summary.grossMargin !== null && summary.grossMargin >= 0.3) { score += 5; reasons.push('Gross margin is at least 30%.'); }
-  else if (summary.grossMargin !== null && summary.grossMargin < 0.1) { score -= 8; reasons.push('Gross margin is below 10%.'); }
-  score = Math.max(0, Math.min(100, score));
-  const status = score >= 80 ? 'Strong' : score >= 65 ? 'Healthy' : score >= 48 ? 'Watch' : score >= 30 ? 'Warning' : 'Critical';
-  return { status, score, reasons };
-}
 
 function statementRows(raw: Db, companyId: number, type: 'income' | 'cashflow' | 'balance', query: Record<string, unknown>): Row[] {
   const map = {
@@ -202,7 +180,7 @@ export function registerApiRoutes({ app, raw, qb, config }: RouteDeps): void {
       `SELECT id, name, realm FROM companies WHERE realm IN ('magnates','entrepreneurs')
        ORDER BY CASE realm WHEN 'magnates' THEN 1 ELSE 2 END`,
     );
-    return { version: '1.1.0', company, realm: company.realm, realms, settings: getSettings(raw), attribution: { creator: 'NullBot', copyrightYear: 2026, display: 'Created by NullBot | Copyright 2026' } };
+    return { operations: { enabled: Boolean(config.OPERATIONS_URL), realm: config.OPERATIONS_REALM, consolePath: config.OPERATIONS_CONSOLE_PATH }, version: '1.1.0', company, realm: company.realm, realms, settings: getSettings(raw), attribution: { creator: 'NullBot', copyrightYear: 2026, display: 'Created by NullBot | Copyright 2026' } };
   });
 
   app.get('/api/auth/status', async (request) => {
@@ -318,7 +296,7 @@ export function registerApiRoutes({ app, raw, qb, config }: RouteDeps): void {
           core,
           netCash,
           cashChange: cash - prevCash,
-          balanceDelta: int(latestBalance['balance_delta']),
+          balanceDelta: latestBalance['snapshot_date'] ? int(latestBalance['balance_delta']) : null,
           grossMargin,
         })
       : { status: 'No Data', score: 0, reasons: ['Import Sim Companies statements to calculate financial health.'] };

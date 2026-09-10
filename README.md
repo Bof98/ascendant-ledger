@@ -1,5 +1,10 @@
 # Ascendant Ledger
 
+This fork adds a live SimCompanies dashboard connected to the existing capture and
+strategy service. See [Operations integration](docs/OPERATIONS_INTEGRATION.md) for
+configuration, deployment, and data ownership. Original accounting features and
+NullBot attribution are retained.
+
 Ascendant Ledger is an **unofficial, self-hosted financial dashboard and accounting companion for Sim Companies**. It imports the CSV exports produced by the game and turns them into persistent dashboards, statements, transaction history, product/building analytics, market analysis, import history, and reconciliation checks.
 
 It is designed for individual players who want a private, QuickBooks-style view of their Sim Companies businesses without sending their financial exports to a third-party service.

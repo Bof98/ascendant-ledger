@@ -8,6 +8,7 @@ import { createQueryBuilder } from './db/kysely.js';
 import { migrate, listApplied } from './db/migrate.js';
 import { ensureInitialUser, readSession } from './auth.js';
 import { registerApiRoutes } from './api/routes.js';
+import { registerOperationsRoutes } from './operations/routes.js';
 
 const APP_VERSION = '1.1.0';
 const startedAt = Date.now();
@@ -39,7 +40,7 @@ const app = Fastify({
 
 app.addHook('onRequest', async (request, reply) => {
   if (!config.AUTH_ENABLED || !request.url.startsWith('/api/')) return;
-  if (request.url === '/api/health' || request.url.startsWith('/api/auth/')) return;
+  if (request.url.split('?')[0] === '/api/health' || request.url.startsWith('/api/auth/')) return;
   const session = readSession(request, config.SESSION_SECRET!);
   if (!session) return reply.code(401).send({ error: 'Authentication required.' });
 });
@@ -62,6 +63,7 @@ app.get('/api/health', async (_request, reply) => {
 });
 
 registerApiRoutes({ app, raw: db, qb, config });
+registerOperationsRoutes(app, config);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const webDir = path.resolve(here, '../web');

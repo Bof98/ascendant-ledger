@@ -1,0 +1,19 @@
+[Unit]
+Description=Ascendant Ledger dashboard with SimCompanies operations
+After=network.target simcompanies-dashboard.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/SimCompanies/ascendant-ledger/server
+EnvironmentFile=/home/ubuntu/SimCompanies/ascendant-ledger/.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/ubuntu/SimCompanies/ascendant-ledger/data
+
+[Install]
+WantedBy=multi-user.target

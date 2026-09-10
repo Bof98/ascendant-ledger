@@ -44,6 +44,13 @@ const EnvSchema = z.object({
 
   /** Set to true only when running behind a reverse proxy you control. */
   TRUST_PROXY: booleanish.default('false'),
+
+  /** Optional connection to the existing Flask capture/strategy service. */
+  OPERATIONS_URL: z.string().url().optional(),
+  OPERATIONS_REALM: z.enum(['magnates', 'entrepreneurs']).default('magnates'),
+  OPERATIONS_TIMEOUT_MS: z.coerce.number().int().min(100).max(120_000).default(30_000),
+  /** Same-origin path to the original console, including its trailing slash. */
+  OPERATIONS_CONSOLE_PATH: z.string().regex(/^\/(?!\/)[a-zA-Z0-9/_-]*\/$/).default('/simcompanies-classic/'),
 });
 
 type RawEnv = z.infer<typeof EnvSchema>;
@@ -65,6 +72,13 @@ function build(source: NodeJS.ProcessEnv): AppConfig {
   }
 
   const env = parsed.data;
+
+  if (env.OPERATIONS_URL) {
+    const url = new URL(env.OPERATIONS_URL);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+      throw new Error('OPERATIONS_URL must be an HTTP(S) base URL without credentials, query, or fragment.');
+    }
+  }
 
   if (env.AUTH_ENABLED && !env.SESSION_SECRET) {
     throw new Error(
