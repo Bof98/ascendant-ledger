@@ -47,6 +47,9 @@ const EnvSchema = z.object({
 
   /** Optional connection to the existing Flask capture/strategy service. */
   OPERATIONS_URL: z.string().url().optional(),
+  /** Read-only database containing this realm's saved captures. Explicit opt-in. */
+  OPERATIONS_DB_PATH: z.string().min(1).optional(),
+  CAPTURE_SYNC_INTERVAL_MS: z.coerce.number().int().min(10_000).max(3_600_000).default(60_000),
   OPERATIONS_REALM: z.enum(['magnates', 'entrepreneurs']).default('magnates'),
   OPERATIONS_TIMEOUT_MS: z.coerce.number().int().min(100).max(120_000).default(30_000),
   /** Same-origin path to the original console, including its trailing slash. */
@@ -72,6 +75,8 @@ function build(source: NodeJS.ProcessEnv): AppConfig {
   }
 
   const env = parsed.data;
+
+  if (env.OPERATIONS_DB_PATH && !env.OPERATIONS_URL) throw new Error('OPERATIONS_DB_PATH requires OPERATIONS_URL for realm verification');
 
   if (env.OPERATIONS_URL) {
     const url = new URL(env.OPERATIONS_URL);

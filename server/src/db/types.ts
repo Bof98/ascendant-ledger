@@ -168,6 +168,8 @@ export interface IncomeStatementFactsTable {
   company_id: number;
   snapshot_at_us: number;
   revision_id: number;
+  executive_royalties: Generated<number>;
+  gain_on_sale: Generated<number>;
   sales: Generated<number>;
   cogs: Generated<number>;
   freight_out: Generated<number>;
@@ -201,6 +203,10 @@ export interface CashflowStatementFactsTable {
   company_id: number;
   snapshot_at_us: number;
   revision_id: number;
+  from_royalties: Generated<number>;
+  from_employees: Generated<number>;
+  for_pa_quests: Generated<number>;
+  rounding_adjustment: Generated<number>;
   all_income: Generated<number>;
   all_expenses: Generated<number>;
   from_retail: Generated<number>;
@@ -229,6 +235,8 @@ export interface BalanceSheetFactsTable {
   company_id: number;
   snapshot_at_us: number;
   revision_id: number;
+  cash_reserved: Generated<number>;
+  construction_in_progress: Generated<number>;
   cash: Generated<number>;
   accounts_receivable: Generated<number>;
   inventory_materials: Generated<number>;

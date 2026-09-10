@@ -41,3 +41,20 @@ Synthetic imports were confined to a separate test database. Production still
 uses its existing captures and its independent CSV ledger. The API's strategy
 forecast and recorded-plan observations retain their backend model limitations;
 the dashboard labels their scope rather than treating them as realized profits.
+
+## Saved-capture integration validation
+
+- Added synthetic coverage for read-only backfill, three financial report mappings,
+  product attribution, original source provenance, delayed transaction arrivals,
+  repeated captures, incomplete reports, year rollover, invalid dates, validation
+  failure without cursor advancement, realm mismatch, and revision rollback.
+- Added reconciliation coverage including exchange and customer receipts.
+- Verified the populated-schema migration still preserves existing records and
+  official net income. New captured statement fields default to zero for older CSVs.
+- Build and all 33 tests pass. A full isolated backfill followed by an immediate
+  repeat produced no duplicate transactions, statement revisions, or import batches.
+- Checked 14 live ledger/data pages in Chromium, including statement values,
+  populated transactions/products/buildings/market, import history, source status,
+  and a 390px mobile viewport. No browser exceptions or document overflow.
+- Live sync checks the source every 60 seconds. Historical statement rounding
+  differences and account-history coverage gaps remain visible in Data Quality.

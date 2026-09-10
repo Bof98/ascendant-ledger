@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Kysely } from 'kysely';
 import type { Database, ReportType, StatementType } from '../db/types.js';
-import { nowIso } from '../domain/time.js';
+import { nowIso, tryParseTimestamp } from '../domain/time.js';
 import { observeCatalogEntries } from '../mappings/registry.js';
 import { readCsv, type CsvDocument } from './csv.js';
 import { detectReportType, getSignature, type DetectionResult } from './detect.js';
@@ -678,7 +678,7 @@ export async function rematerialiseAll(trx: Kysely<Database>, companyId: number)
     for (const [index, period] of periods.entries()) {
       const winning = await trx
         .selectFrom('statement_revisions')
-        .select(['id', 'values_json', 'snapshot_at'])
+        .select(['id', 'values_json', 'snapshot_at', 'raw_row_json'])
         .where('period_id', '=', period.id)
         .orderBy('observed_at', 'desc')
         .orderBy('id', 'desc')
@@ -693,15 +693,18 @@ export async function rematerialiseAll(trx: Kysely<Database>, companyId: number)
       }
 
       const values = JSON.parse(winning.values_json) as Record<string, number>;
+      const sourceStart = tryParseTimestamp(JSON.parse(winning.raw_row_json)['Source period start'] ?? '');
+      const winningTime = tryParseTimestamp(winning.snapshot_at)!;
 
       await trx
         .updateTable('statement_periods')
         .set({
           current_revision_id: winning.id,
           snapshot_at: winning.snapshot_at,
-          period_start_at: previousAt,
-          period_start_at_us: previousUs,
-          is_inception: index === 0 ? 1 : 0,
+          snapshot_at_us: winningTime.epochMicros,
+          period_start_at: sourceStart?.raw ?? previousAt,
+          period_start_at_us: sourceStart?.epochMicros ?? previousUs,
+          is_inception: index === 0 && !sourceStart ? 1 : 0,
           updated_at: nowIso(),
         })
         .where('id', '=', period.id)
@@ -715,8 +718,9 @@ export async function rematerialiseAll(trx: Kysely<Database>, companyId: number)
 
       const payload = {
         company_id: companyId,
-        snapshot_at_us: period.snapshot_at_us,
+        snapshot_at_us: winningTime.epochMicros,
         revision_id: winning.id,
+        ...Object.fromEntries(Object.values(getColumnMap(type)).map(column => [column, 0])),
         ...values,
       };
 
@@ -738,7 +742,7 @@ export async function rematerialiseAll(trx: Kysely<Database>, companyId: number)
           .execute();
       }
 
-      previousUs = period.snapshot_at_us;
+      previousUs = winningTime.epochMicros;
       previousAt = winning.snapshot_at;
     }
   }

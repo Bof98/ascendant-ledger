@@ -41,6 +41,7 @@ const SIGNATURES: ReportSignature[] = [
     discriminators: ['cogs', 'netincome', 'gross', 'exchange fees', 'freight out'],
     known: [
       'timestamp',
+      'executive royalties', 'gain on sale',
       'sales',
       'cogs',
       'freight out',
@@ -68,6 +69,7 @@ const SIGNATURES: ReportSignature[] = [
     discriminators: ['all income', 'all expenses', 'from retail', 'to suppliers', 'game income'],
     known: [
       'timestamp',
+      'from royalties', 'from employees', 'for pa quests', 'rounding adjustment',
       'all income',
       'all expenses',
       'from retail',
@@ -100,6 +102,7 @@ const SIGNATURES: ReportSignature[] = [
     ],
     known: [
       'timestamp',
+      'cash reserved for orders', 'construction in progress',
       'cash',
       'accounts receivable',
       'inventory - materials',

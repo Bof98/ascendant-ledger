@@ -18,7 +18,7 @@ import { nowIso } from '../domain/time.js';
  *   3. Change in Retained Earnings
  *        = (NetIncome - Achievements Referrals PA) + OCI.      (3/3 exact)
  *   4. Change in Contributed Capital = Achievements Referrals PA. (3/3 exact)
- *   5. Income Statement Sales - Cash Flow From retail
+ *   5. Income Statement Sales - cash receipts from retail, exchange and customers
  *        = change in Accounts Receivable.                      (3/3 exact)
  *
  * Identities 1 and 2 are enforced structurally by stored generated columns, so
@@ -70,12 +70,14 @@ export async function runIdentityChecks(
 
   const balance = await db
     .selectFrom('balance_sheet_facts as f')
+    .innerJoin('statement_revisions as r', 'r.id', 'f.revision_id')
     .innerJoin('statement_periods as p', 'p.id', 'f.period_id')
     .select([
       'p.id as period_id',
       'p.snapshot_date',
       'p.is_inception',
       'f.snapshot_at_us',
+      'r.raw_row_json',
       'f.balance_delta',
       'f.total_assets',
       'f.liabilities',
@@ -96,6 +98,8 @@ export async function runIdentityChecks(
       'p.snapshot_date',
       'f.snapshot_at_us',
       'f.from_retail',
+      'f.from_exchange',
+      'f.from_customers',
       'f.net_cash_flow',
       'f.unclassified_net',
     ])
@@ -125,13 +129,14 @@ export async function runIdentityChecks(
   // Identity 2 — reads the generated column.
   for (const row of balance) {
     if (row.balance_delta !== 0) {
+      const roundedCapture = JSON.parse(row.raw_row_json)['Source kind'] === 'saved game capture' && Math.abs(row.balance_delta) <= 5;
       findings.push({
-        checkCode: 'balance_sheet_unbalanced',
-        severity: 'error',
+        checkCode: roundedCapture ? 'captured_balance_rounding_difference' : 'balance_sheet_unbalanced',
+        severity: roundedCapture ? 'info' : 'error',
         subjectType: 'statement_period',
         subjectId: String(row.period_id),
         occurredAt: row.snapshot_date,
-        message: `Balance Sheet for ${row.snapshot_date} does not balance. Assets ${row.total_assets} against Liabilities plus Equity ${row.liabilities + row.total_equity}, a difference of ${row.balance_delta}.`,
+        message: `${roundedCapture ? 'Rounded captured balance-sheet lines' : 'Balance Sheet'} for ${row.snapshot_date} differ. Assets ${row.total_assets} against Liabilities plus Equity ${row.liabilities + row.total_equity}, a difference of ${row.balance_delta}.`,
         details: {
           totalAssets: row.total_assets,
           liabilities: row.liabilities,
@@ -193,7 +198,7 @@ export async function runIdentityChecks(
 
       if (cf) {
         const actualReceivable = current.accounts_receivable - previous.accounts_receivable;
-        const expectedReceivable = is.sales - cf.from_retail;
+        const expectedReceivable = is.sales - cf.from_retail - cf.from_exchange - cf.from_customers;
         if (actualReceivable !== expectedReceivable) {
           findings.push({
             checkCode: 'accrual_cash_bridge_mismatch',
@@ -201,12 +206,14 @@ export async function runIdentityChecks(
             subjectType: 'statement_period',
             subjectId: String(current.period_id),
             occurredAt: current.snapshot_date,
-            message: `Accounts Receivable moved by ${actualReceivable} on ${current.snapshot_date}, but accrual Sales ${is.sales} less cash from retail ${cf.from_retail} predicts ${expectedReceivable}.`,
+            message: `Accounts Receivable moved by ${actualReceivable} on ${current.snapshot_date}, but accrual Sales ${is.sales} less cash from retail, exchange and customers ${cf.from_retail + cf.from_exchange + cf.from_customers} predicts ${expectedReceivable}.`,
             details: {
               actual: actualReceivable,
               expected: expectedReceivable,
               sales: is.sales,
               fromRetail: cf.from_retail,
+              fromExchange: cf.from_exchange,
+              fromCustomers: cf.from_customers,
             },
           });
         }

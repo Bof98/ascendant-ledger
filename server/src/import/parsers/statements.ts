@@ -25,6 +25,8 @@ import type { CsvRow } from '../csv.js';
 export type ColumnMap = Readonly<Record<string, string>>;
 
 const INCOME_STATEMENT_COLUMNS: ColumnMap = {
+  'executive royalties': 'executive_royalties',
+  'gain on sale': 'gain_on_sale',
   sales: 'sales',
   cogs: 'cogs',
   'freight out': 'freight_out',
@@ -46,6 +48,10 @@ const INCOME_STATEMENT_COLUMNS: ColumnMap = {
 };
 
 const CASHFLOW_STATEMENT_COLUMNS: ColumnMap = {
+  'from royalties': 'from_royalties',
+  'from employees': 'from_employees',
+  'for pa quests': 'for_pa_quests',
+  'rounding adjustment': 'rounding_adjustment',
   'all income': 'all_income',
   'all expenses': 'all_expenses',
   'from retail': 'from_retail',
@@ -66,6 +72,8 @@ const CASHFLOW_STATEMENT_COLUMNS: ColumnMap = {
 };
 
 const BALANCE_SHEET_COLUMNS: ColumnMap = {
+  'cash reserved for orders': 'cash_reserved',
+  'construction in progress': 'construction_in_progress',
   cash: 'cash',
   'accounts receivable': 'accounts_receivable',
   'inventory - materials': 'inventory_materials',

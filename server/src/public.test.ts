@@ -97,7 +97,15 @@ describe('public fresh install', () => {
     migrate(existing, { dir: oldDir });
     const existingQb = createQueryBuilder(existing);
     try {
-      await commitBatch(existingQb, 1, [{ originalFilename: 'income.csv', content: INCOME.replace(',1000,-600,0,0,-10', ',1000,-600,-20,0,-10').replace(',450', ',430') }]);
+      await commitBatch(db, magnatesId, [{ originalFilename: 'income.csv', content: INCOME.replace(',1000,-600,0,0,-10', ',1000,-600,-20,0,-10').replace(',450', ',430') }]);
+      // Seed the historical schema using only its writable columns. The current
+      // importer deliberately requires the current schema, including new fields.
+      for (const table of ['import_batches', 'import_files', 'statement_periods', 'statement_revisions', 'income_statement_facts']) {
+        const cols = (existing.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(c => c.name);
+        for (const row of raw.prepare(`SELECT * FROM ${table}`).all() as Record<string, unknown>[]) {
+          existing.prepare(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...cols.map(c => row[c]));
+        }
+      }
       expect(existing.prepare('SELECT gross_profit FROM income_statement_facts').get()).toEqual({ gross_profit: 400 });
       migrate(existing, { dir: migrationDir });
       expect(existing.prepare('SELECT gross_profit, net_income FROM income_statement_facts').get()).toEqual({ gross_profit: 380, net_income: 430 });
