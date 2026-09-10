@@ -66,9 +66,11 @@ export async function syncCaptures(raw: Db, qb: Kysely<Database>, sourcePath: st
   for (const type of types) {
     const changed = [...records.values()].filter(record => {
       if (record.type !== type) return false;
-      const current = raw.prepare(`SELECT r.values_json FROM statement_periods p JOIN statement_revisions r ON r.id=p.current_revision_id
-        WHERE p.company_id=? AND p.statement_type=? AND p.snapshot_date=?`).get(company.id, type, record.timestamp.slice(0, 10)) as { values_json: string } | undefined;
+      const current = raw.prepare(`SELECT r.values_json, r.raw_row_json FROM statement_periods p JOIN statement_revisions r ON r.id=p.current_revision_id
+        WHERE p.company_id=? AND p.statement_type=? AND p.snapshot_date=?`).get(company.id, type, record.timestamp.slice(0, 10)) as { values_json: string; raw_row_json: string } | undefined;
       if (!current) return true;
+      // An uploaded/downloaded CSV is authoritative over a rounded screen capture.
+      if (JSON.parse(current.raw_row_json)['Source kind'] !== 'saved game capture') return false;
       const values = JSON.parse(current.values_json) as Record<string, number>;
       return Object.entries(record.values).some(([k, value]) => (values[k] ?? 0) !== value);
     });

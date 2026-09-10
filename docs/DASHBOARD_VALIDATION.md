@@ -58,3 +58,18 @@ the dashboard labels their scope rather than treating them as realized profits.
   and a 390px mobile viewport. No browser exceptions or document overflow.
 - Live sync checks the source every 60 seconds. Historical statement rounding
   differences and account-history coverage gaps remain visible in Data Quality.
+
+## Automatic original CSV download validation
+
+- Synthetic tests cover company/realm verification before and after downloads,
+  cookie scope/expiry, GET-only requests, redirected or expired sessions, rate
+  limits, non-CSV responses, download-size limits, complete-batch validation,
+  exact-byte archives, duplicate downloads, and official statement precedence.
+- Fields omitted from official CSV schemas retain explicit captured provenance;
+  downloaded originals remain unchanged. A regression test covers construction
+  in progress and its effect on total assets.
+- Rehearsed all four actual exports against an isolated copy of the live ledger.
+  Re-importing the same downloads added no records; replaying captured history
+  did not replace official statement values.
+- Verified seven live dashboard pages, download status, Import History provenance,
+  latest statement figures, and mobile overflow in Chromium.

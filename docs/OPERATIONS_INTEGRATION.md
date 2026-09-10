@@ -106,3 +106,46 @@ Rollback still works for imported revisions, but while sync is active removed
 captured transaction IDs will be backfilled again. To reprocess all snapshots
 (e.g. after extending a field mapping), disable sync, back up the ledger, remove
 only `app_settings` key `capture-sync:<realm>`, then restart with sync enabled.
+
+## Automatic official CSV downloads
+
+Configure `CSV_STORAGE_STATE_PATH` with the existing Playwright login-state file
+and `CSV_COMPANY_ID` with the intended game's numeric company ID. The session
+file is only read; session renewal remains with the capture service's normal
+login flow. `OPERATIONS_REALM` selects the ledger destination. Downloads do not
+switch companies or realms and do not perform gameplay actions.
+
+`CSV_SYNC_INTERVAL_MS` defaults to one hour (minimum 15 minutes). A saved next
+attempt time survives restarts. Each attempt checks company ID and realm through
+the game's `/api/v3/companies/auth-data/` endpoint, downloads Account History,
+Income Statement, Balance Sheet, and Cash Flow Statement from the game's CSV
+endpoints, then checks identity again before importing. Requests are GET-only,
+restricted to `https://www.simcompanies.com`, reject redirects, and forward only
+unexpired cookies scoped to that host and request path. Response sizes and
+request durations are bounded. Login pages, mismatched identities, rate limits,
+and invalid/empty exports leave existing imports intact and appear in status.
+
+All four files are validated before importing. Exact original bytes are retained
+under `DATA_DIR/csv-downloads/<realm>/<sha256>-<filename>` with private file
+permissions. Unchanged exports reuse their stored file and do not create another
+import batch. New files use the existing transactional import pipeline and its
+transaction-ID deduplication. Import History distinguishes downloaded originals
+from generated capture files. `/api/csv-sync?realm=magnates` shows the most recent
+attempt, success, error, next attempt, file hashes and row counts; it never
+exposes session cookies or the session-file path.
+
+Official uploaded or downloaded CSV statements take precedence over rounded
+screen captures. The capture sync still fills in recent account activity and
+statement dates that have no official CSV yet. This precedence is checked again
+inside the import transaction, so a capture staged before a concurrent CSV import
+cannot overwrite it. To disable downloads, remove both CSV session and company
+settings and restart only the ledger service. Archives remain available locally;
+include the data directory in normal backups.
+
+Some official export schemas omit fields present in captured reports (notably
+construction in progress). For those specific fields only, absent CSV columns
+are supplemented from a retained capture of the same statement date. Values
+actually supplied by the CSV always win. The revision's raw source row records
+`Captured supplemental fields` with the contributing capture revision ID and
+values; the archived downloaded file is never edited. Captured cash-flow
+rounding adjustments are not carried into CSV totals.

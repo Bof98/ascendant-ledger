@@ -600,7 +600,44 @@ async function appendStatementRevisions(
       isNewPeriod = true;
     }
 
+    // Check precedence inside the transaction as well as in capture staging:
+    // a CSV import may have committed while the capture sync was awaiting its turn.
+    if (row.raw['Source kind'] === 'saved game capture' && period.current_revision_id) {
+      const current = await trx.selectFrom('statement_revisions').select('raw_row_json')
+        .where('id', '=', period.current_revision_id).executeTakeFirst();
+      if (current && JSON.parse(current.raw_row_json)['Source kind'] !== 'saved game capture') {
+        duplicate += 1;
+        continue;
+      }
+    }
     periodIds.push(period.id);
+
+    // Official exports currently omit several fields shown in the game UI.
+    // Supplement ONLY those absent columns from retained capture provenance.
+    // The downloaded file and its supplied values remain unchanged.
+    if (row.raw['Source kind'] !== 'saved game capture') {
+      const supplementary: Record<StatementType, string[]> = {
+        income_statement: ['executive_royalties', 'gain_on_sale'],
+        balance_sheet: ['cash_reserved', 'construction_in_progress'],
+        cashflow_statement: ['from_royalties', 'from_employees', 'for_pa_quests'],
+      };
+      const suppliedHeaders = new Set(Object.keys(row.raw).map(h => h.trim().replace(/\s+/g, ' ').toLowerCase()));
+      const missing = Object.entries(getColumnMap(type)).filter(([header, column]) =>
+        supplementary[type].includes(column) && !suppliedHeaders.has(header));
+      if (missing.length) {
+        const sources = await trx.selectFrom('statement_revisions').select(['id', 'values_json', 'raw_row_json'])
+          .where('period_id', '=', period.id).orderBy('id', 'desc').execute();
+        const capture = sources.find(r => JSON.parse(r.raw_row_json)['Source kind'] === 'saved game capture');
+        if (capture) {
+          const capturedValues = JSON.parse(capture.values_json) as Record<string, number>;
+          const used: Record<string, number> = {};
+          for (const [, column] of missing) {
+            if (capturedValues[column]) row.values[column] = used[column] = capturedValues[column]!;
+          }
+          if (Object.keys(used).length) row.raw['Captured supplemental fields'] = JSON.stringify({ revisionId: capture.id, values: used });
+        }
+      }
+    }
 
     const rowHash = stableHash(row.values);
     const currentHash = period.current_revision_id

@@ -8,6 +8,7 @@ import { createQueryBuilder } from './db/kysely.js';
 import { migrate, listApplied } from './db/migrate.js';
 import { ensureInitialUser, readSession } from './auth.js';
 import { registerApiRoutes } from './api/routes.js';
+import { registerCsvSync } from './operations/csv-sync.js';
 import { registerCaptureSync } from './operations/capture-sync.js';
 import { registerOperationsRoutes } from './operations/routes.js';
 
@@ -66,6 +67,7 @@ app.get('/api/health', async (_request, reply) => {
 registerApiRoutes({ app, raw: db, qb, config });
 registerOperationsRoutes(app, config);
 registerCaptureSync(app, db, qb, config);
+registerCsvSync(app, db, qb, config);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const webDir = path.resolve(here, '../web');
